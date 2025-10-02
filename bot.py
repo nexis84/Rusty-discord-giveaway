@@ -8,6 +8,8 @@ from flask import Flask
 import threading
 
 TOKEN = os.getenv('DISCORD_TOKEN')
+GUILD_ID = os.getenv('GUILD_ID')  # optional: when set, commands will sync to this guild for instant testing
+SYNC_COMMANDS = os.getenv('SYNC_COMMANDS', 'true').lower() == 'true'  # set to 'false' to disable command registration from this instance
 
 intents = discord.Intents.default()
 intents.members = True
@@ -80,11 +82,33 @@ async def on_reaction_add(reaction, user):
 
 @bot.event
 async def on_ready():
-    await tree.sync()
+    # Sync commands. If GUILD_ID is set, sync to that guild for instant availability (useful for testing).
+    try:
+        if not SYNC_COMMANDS:
+            print("Command sync disabled by SYNC_COMMANDS env var")
+        else:
+            if GUILD_ID:
+                try:
+                    guild_obj = discord.Object(id=int(GUILD_ID))
+                    synced = await tree.sync(guild=guild_obj)
+                    print(f"Synced {len(synced)} commands to guild {GUILD_ID}")
+                except Exception as e:
+                    print(f"Failed to sync to guild {GUILD_ID}: {e}")
+                    # fallback to global sync
+                    synced = await tree.sync()
+                    print(f"Synced {len(synced)} global commands (fallback)")
+            else:
+                synced = await tree.sync()
+                print(f"Synced {len(synced)} global commands")
+    except Exception as e:
+        print("Command sync failed:", e)
+
     print(f'Logged in as {bot.user}')
+
 
 def run_bot():
     bot.run(TOKEN)
+
 
 if __name__ == '__main__':
     threading.Thread(target=run_bot).start()
